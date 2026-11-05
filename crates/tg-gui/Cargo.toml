@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "tag-gui"
+path = "src/main.rs"
+
 [dependencies]
 tg-core.workspace = true
 tg-caption = { path = "../tg-caption" }

@@ -25,7 +25,30 @@ Python app.
 Not yet ported: WD Tagger (ONNX), dataset statistics, convert-images,
 tag presets, caption profiles, Danbooru autocomplete.
 
-## Building
+## Installation
+
+### Windows (automated)
+
+1. Install [Git](https://git-scm.com/downloads) if you don't already have
+   it (only needed for updates; you can also download a ZIP instead).
+2. Clone the repository (or download and extract the ZIP from the green
+   `Code` button):
+   ```
+   git clone https://github.com/8bit-boom/taggui-rs.git
+   cd taggui-rs
+   ```
+3. Run `install.bat`. It installs everything needed - the Rust toolchain
+   (via winget or rustup-init), the Microsoft C++ build tools if the
+   build needs them, and builds TagGUI-rs. The first build can take
+   5-15 minutes; after that, updates are much faster.
+4. Double-click `taggui-rs.bat` to start the app.
+5. To update later, run `update.bat`. It pulls the latest code and
+   rebuilds.
+
+`install.bat` is safe to re-run at any time - it skips whatever is
+already installed.
+
+### Linux / manual (any platform)
 
 Requires the Rust toolchain (https://rustup.rs).
 
