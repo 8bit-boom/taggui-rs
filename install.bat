@@ -193,6 +193,12 @@ if %errorlevel% equ 0 (
 
 :gpu_done
 
+rem A previously interrupted GPU build can leave a partial CMake cache
+rem ^(CMakeCache.txt without the generated project^); the cmake crate then
+rem skips reconfiguration and every build dies with MSB1009. Remove any
+rem such broken build tree before building.
+call :purge_broken_cmake
+
 rem ---------------------------------------------------------------------------
 rem 3. Build TagGUI-rs with the chosen features.
 rem ---------------------------------------------------------------------------
@@ -305,6 +311,20 @@ for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
 if defined CUDA_DIR (
     set "CUDA_PATH=!CUDA_DIR!"
     set "PATH=!CUDA_DIR!\bin;%PATH%"
+)
+exit /b 0
+
+:purge_broken_cmake
+rem Remove llama.cpp cmake build trees that were configured but never
+rem finished (CMakeCache.txt present, generated project missing) - they
+rem make every subsequent build fail with MSB1009.
+for /d %%F in ("target\release\build\llama-cpp-sys-2-*") do (
+    if exist "%%F\out\build\CMakeCache.txt" (
+        if not exist "%%F\out\build\INSTALL.vcxproj" (
+            echo [build] Removing a stale partial cmake build tree...
+            rd /s /q "%%F\out\build"
+        )
+    )
 )
 exit /b 0
 

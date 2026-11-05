@@ -47,15 +47,14 @@ if exist "C:\Program Files\LLVM\bin\libclang.dll" (
 rem Rebuild with the same GPU features install.bat chose: CUDA when an
 rem NVIDIA GPU + toolkit are present, Vulkan when the SDK is installed.
 set "BUILD_FEATURES="
-where nvcc >nul 2>nul
-if %errorlevel% equ 0 (
+call :find_nvcc
+if defined NVCC_PATH (
     set "BUILD_FEATURES=--features tg-caption/cuda"
     goto :gpu_found
 )
 for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
     if exist "%%D\bin\nvcc.exe" (
-        set "PATH=%%D\bin;%PATH%"
-        set "CUDA_PATH=%%D"
+        set "CUDA_DIR=%%D"
         set "BUILD_FEATURES=--features tg-caption/cuda"
     )
 )
@@ -68,6 +67,20 @@ if defined BUILD_FEATURES (
     echo          CUDA build.^)
 )
 
+rem MSBuild's CUDA targets read CUDA_PATH from the *process* environment;
+rem a session started before the toolkit was installed does not have it,
+rem so wire it up here from wherever nvcc was found.
+if defined CUDA_DIR (
+    set "CUDA_PATH=!CUDA_DIR!"
+    set "PATH=!CUDA_DIR!\bin;%PATH%"
+)
+
+rem A previously interrupted GPU build can leave a partial CMake cache
+rem ^(CMakeCache.txt without the generated project^); the cmake crate then
+rem skips reconfiguration and every build dies with MSB1009. Remove any
+rem such broken build tree before building.
+call :purge_broken_cmake
+
 echo [update] Rebuilding (usually much faster than the first build)...
 cargo build --release -p tg-gui !BUILD_FEATURES!
 if %errorlevel% neq 0 (
@@ -77,11 +90,11 @@ if %errorlevel% neq 0 (
     cargo build --release -p tg-gui !BUILD_FEATURES!
 )
 if %errorlevel% neq 0 (
-    echo [update] Still failing; trying the toolchain cargo directly...
-    set "TOOLCHAIN_CARGO=%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin\cargo.exe"
-    if exist "!TOOLCHAIN_CARGO!" (
-        "!TOOLCHAIN_CARGO!" build --release -p tg-gui !BUILD_FEATURES!
-    )
+    echo [update] Still failing; clearing the llama.cpp cmake build trees
+    echo          and retrying ^(a partial cache from an interrupted build
+    echo          is the usual cause; the retry recompiles from scratch^)...
+    call :purge_all_cmake
+    cargo build --release -p tg-gui !BUILD_FEATURES!
 )
 if %errorlevel% neq 0 (
     echo [update] One more retry, CPU-only ^(the GPU feature may be the
@@ -100,6 +113,55 @@ echo.
 echo [done] Updated and rebuilt. Double-click start.bat to start.
 echo.
 pause
+exit /b 0
+
+:find_nvcc
+rem Locate nvcc: PATH first, then the standard CUDA install directories.
+rem Sets NVCC_PATH and CUDA_DIR (the toolkit root).
+set "NVCC_PATH="
+set "CUDA_DIR="
+where nvcc >nul 2>nul
+if %errorlevel% equ 0 (
+    for /f "delims=" %%P in ('where nvcc') do (
+        set "NVCC_PATH=%%P"
+        for %%D in ("%%P\..\..") do set "CUDA_DIR=%%~fD"
+        goto :find_nvcc_done
+    )
+)
+for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
+    if exist "%%D\bin\nvcc.exe" (
+        set "NVCC_PATH=%%D\bin\nvcc.exe"
+        set "CUDA_DIR=%%D"
+    )
+)
+:find_nvcc_done
+exit /b 0
+
+:purge_broken_cmake
+rem Remove llama.cpp cmake build trees that were configured but never
+rem finished (CMakeCache.txt present, generated project missing) - they
+rem make every subsequent build fail with MSB1009.
+set "PURGED="
+for /d %%F in ("target\release\build\llama-cpp-sys-2-*") do (
+    if exist "%%F\out\build\CMakeCache.txt" (
+        if not exist "%%F\out\build\INSTALL.vcxproj" (
+            echo [update] Removing a stale partial cmake build tree...
+            rd /s /q "%%F\out\build"
+            set "PURGED=1"
+        )
+    )
+)
+exit /b 0
+
+:purge_all_cmake
+rem Nuclear option: remove every llama.cpp cmake build tree so the next
+rem build reconfigures and recompiles from scratch.
+for /d %%F in ("target\release\build\llama-cpp-sys-2-*") do (
+    if exist "%%F\out\build" (
+        echo [update] Clearing %%F\out\build ...
+        rd /s /q "%%F\out\build"
+    )
+)
 exit /b 0
 
 :fail
