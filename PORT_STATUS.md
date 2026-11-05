@@ -56,7 +56,8 @@ Legend: **done** | partial | deferred | n/a (not applicable)
 | ETA in progress UI | **done** | |
 | **Local models** | **done** | Via llama.cpp GGUF + mtmd (`local.rs`): Qwen-VL-family chat format, mmproj vision, GPU offload via `n_gpu_layers` (CUDA/Vulkan builds), quantization via GGUF quants. Sequential (decode is single-threaded) |
 | **WD Tagger (ONNX)** | **done** | `ort` crate; exact port of preprocessing (white composite, square pad, bicubic resize, RGB->BGR), kaomoji handling, category filtering, thresholds, sort, truncate |
-| Model manager (downloads) | **done** | HF repo file listing + streamed downloads with progress |
+| Model manager (downloads) | **done** | HF repo file listing + streamed downloads with progress; quick-pick repos; auto-selects GGUF/mmproj/ONNX files from a repo |
+| GPU auto-detection + auto-setup | **done** | App detects GPUs at startup (nvidia-smi + Windows CIM), auto-offloads when the build matches, warns on CPU/GPU mismatch; install.bat auto-installs CUDA (NVIDIA) or the Vulkan SDK (AMD/Intel) and builds with the right feature; flash attention enabled automatically on GPU offload |
 | Local transformers checkpoints (safetensors) | n/a | By design: local inference uses GGUF; the transformers architectures stay in the Python app |
 | SageAttention / bnb quantization / attn picker | n/a | transformers-specific; GGUF quantization replaces them |
 | Caption profiles | deferred | |

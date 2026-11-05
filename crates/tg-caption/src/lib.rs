@@ -3,6 +3,7 @@
 //! models via llama.cpp mtmd, and WD Tagger via ONNX Runtime.
 
 pub mod client;
+pub mod gpu;
 pub mod hf;
 pub mod local;
 pub mod prompt_templates;

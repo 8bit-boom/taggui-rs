@@ -185,6 +185,41 @@ pub fn captioner(ctx: &egui::Context, app: &mut TagGuiApp) {
         .default_width(340.0)
         .show(ctx, |ui| {
             ui.heading("Auto-Captioner");
+            // GPU status line.
+            let build_backend = tg_caption::gpu::gpu_backend();
+            let nvidia_count = app.gpus.iter().filter(|gpu| gpu.is_nvidia).count();
+            let status = if nvidia_count > 0 && build_backend == "cuda" {
+                format!(
+                    "GPU: {} - build: CUDA (offloaded)",
+                    app.gpus
+                        .iter()
+                        .filter(|gpu| gpu.is_nvidia)
+                        .map(|gpu| match gpu.vram_mb {
+                            Some(vram) => {
+                                format!("{} ({} MiB)", gpu.name, vram)
+                            }
+                            None => gpu.name.clone(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else if nvidia_count > 0 {
+                "GPU detected, but this build is CPU-only. Re-run \
+                 install.bat for a CUDA build."
+                    .to_string()
+            } else if !app.gpus.is_empty() {
+                format!(
+                    "GPUs: {} - build: {build_backend}",
+                    app.gpus
+                        .iter()
+                        .map(|gpu| gpu.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                format!("No GPU detected - build: {build_backend}")
+            };
+            ui.small(status);
             egui::ComboBox::from_id_salt("backend")
                 .selected_text(app.backend.as_str())
                 .show_ui(ui, |ui| {
@@ -360,9 +395,47 @@ fn model_manager(ui: &mut egui::Ui, app: &mut TagGuiApp) {
     egui::CollapsingHeader::new("Model Manager (downloads)")
         .default_open(false)
         .show(ui, |ui| {
-            ui.label("Repository id (e.g. Qwen/Qwen3-VL-8B-Instruct-GGUF)");
+            ui.label("Repository id");
             ui.add(egui::TextEdit::singleline(&mut app.download_repo));
-            ui.label("Files (comma-separated, e.g. model.gguf, mmproj.gguf)");
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !app.download_fetching,
+                        egui::Button::new("Find model files"),
+                    )
+                    .clicked()
+                {
+                    app.fetch_repo_files();
+                }
+                if app.download_fetching {
+                    ui.small("Looking up the repository...");
+                }
+            });
+            ui.small("Quick picks:");
+            ui.horizontal_wrapped(|ui| {
+                for (label, repo) in [
+                    ("Qwen3-VL 4B (GGUF)", "ggml-org/Qwen3-VL-4B-Instruct-GGUF"),
+                    ("Qwen3-VL 8B (GGUF)", "ggml-org/Qwen3-VL-8B-Instruct-GGUF"),
+                    (
+                        "Qwen2.5-VL 7B (GGUF)",
+                        "ggml-org/Qwen2.5-VL-7B-Instruct-GGUF",
+                    ),
+                    (
+                        "WD EVA02-Large tagger (ONNX)",
+                        "SmilingWolf/wd-eva02-large-tagger-v3",
+                    ),
+                    (
+                        "WD ViT-Large tagger (ONNX)",
+                        "SmilingWolf/wd-vit-large-tagger-v3",
+                    ),
+                ] {
+                    if ui.small_button(label).clicked() {
+                        app.download_repo = repo.to_owned();
+                        app.fetch_repo_files();
+                    }
+                }
+            });
+            ui.label("Files (auto-filled by Find model files; edit to taste)");
             ui.add(egui::TextEdit::singleline(&mut app.download_files));
             if ui
                 .add_enabled(!app.download_active, egui::Button::new("Download"))

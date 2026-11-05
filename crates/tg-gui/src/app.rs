@@ -111,6 +111,8 @@ pub struct TagGuiApp {
     pub local_model_path: String,
     pub local_mmproj_path: String,
     pub local_gpu_layers: i32,
+    /// GPUs found at startup (name + VRAM where reported).
+    pub gpus: Vec<tg_caption::gpu::GpuInfo>,
     // WD tagger settings.
     pub wd_model_path: String,
     pub wd_min_probability: f32,
@@ -121,6 +123,10 @@ pub struct TagGuiApp {
     pub download_files: String,
     pub download_active: bool,
     pub download_progress: Vec<String>,
+    /// File list fetched from the Hub for the current repo (the
+    /// auto-install suggestions).
+    pub download_repo_files: Vec<String>,
+    pub download_fetching: bool,
     pub extras: crate::extras::ExtrasState,
 }
 
@@ -129,7 +135,7 @@ impl TagGuiApp {
         let (thumbnail_tx, thumbnail_rx) = mpsc::channel();
         let (viewer_tx, viewer_rx) = mpsc::channel();
         let (_caption_tx, caption_rx) = mpsc::channel();
-        Self {
+        let mut app = Self {
             settings,
             images: Vec::new(),
             folder: None,
@@ -174,6 +180,7 @@ impl TagGuiApp {
             local_model_path: String::new(),
             local_mmproj_path: String::new(),
             local_gpu_layers: 0,
+            gpus: Vec::new(),
             wd_model_path: String::new(),
             wd_min_probability: 0.35,
             wd_max_tags: 30,
@@ -182,7 +189,62 @@ impl TagGuiApp {
             download_files: String::new(),
             download_active: false,
             download_progress: Vec::new(),
+            download_repo_files: Vec::new(),
+            download_fetching: false,
             extras: crate::extras::ExtrasState::default(),
+        };
+        app.setup_gpu();
+        app
+    }
+
+    /// Detect GPUs once at startup and auto-configure local-model
+    /// settings: with a CUDA build and an NVIDIA GPU present, offload
+    /// everything; otherwise warn about mismatches.
+    pub fn setup_gpu(&mut self) {
+        self.gpus = tg_caption::gpu::detect_gpus();
+        let build_backend = tg_caption::gpu::gpu_backend();
+        let has_nvidia = self.gpus.iter().any(|gpu| gpu.is_nvidia);
+        if has_nvidia && build_backend == "cuda" {
+            self.local_gpu_layers = 999;
+            let names = self
+                .gpus
+                .iter()
+                .filter(|gpu| gpu.is_nvidia)
+                .map(|gpu| gpu.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.log(format!(
+                "GPU detected ({names}): local GGUF models will offload \
+                 all layers to it. Build: CUDA."
+            ));
+        } else if has_nvidia {
+            self.log(format!(
+                "NVIDIA GPU detected, but this build is CPU-only (build \
+                 backend: {build_backend}). Re-run install.bat to build \
+                 with CUDA for fast local captioning."
+            ));
+        } else if !self.gpus.is_empty() {
+            if build_backend == "vulkan" {
+                self.local_gpu_layers = 999;
+                self.log(
+                    "GPU detected: local GGUF models will use Vulkan. \
+                     Build: vulkan."
+                        .to_string(),
+                );
+            } else {
+                let name = &self.gpus[0].name;
+                self.log(format!(
+                    "Display adapter detected ({name}) - no NVIDIA CUDA \
+                     path. Local GGUF models will run on CPU; a Vulkan \
+                     build could use this GPU."
+                ));
+            }
+        } else {
+            self.log(format!(
+                "No GPU detected - local GGUF models will run on CPU \
+                 (slow for vision models). The remote API backend is \
+                 unaffected. Build backend: {build_backend}."
+            ));
         }
     }
 
@@ -391,6 +453,54 @@ impl TagGuiApp {
                 self.apply_filter();
             }
             Err(error) => self.log(format!("Failed to save tags: {error}")),
+        }
+    }
+
+    /// Fetch the Hub file list for the repo and pre-fill the files
+    /// field with everything the local engine can use (GGUF shards,
+    /// mmproj projectors, ONNX models, tag CSVs) - the auto-install
+    /// path: one click per repo instead of hunting filenames.
+    pub fn fetch_repo_files(&mut self) {
+        if self.download_fetching {
+            return;
+        }
+        let repo = self.download_repo.trim().to_owned();
+        if repo.is_empty() {
+            self.log("Enter a repository id first.");
+            return;
+        }
+        self.download_fetching = true;
+        self.download_repo_files.clear();
+        let sender = repo_files_sender();
+        thread::spawn(move || {
+            if let Ok(files) = hf::list_files(&repo, None) {
+                let _ = sender.send((repo, files));
+            }
+        });
+    }
+
+    pub fn poll_repo_files(&mut self) {
+        for (repo, files) in take_repo_files() {
+            self.download_fetching = false;
+            self.download_repo_files = files.clone();
+            // Auto-pick: GGUF files (model shards + projectors), ONNX
+            // models, and the WD tag CSV.
+            let wanted: Vec<String> = files
+                .into_iter()
+                .filter(|file| {
+                    let lower = file.to_lowercase();
+                    lower.ends_with(".gguf")
+                        || lower.ends_with(".onnx")
+                        || lower.ends_with("selected_tags.csv")
+                })
+                .collect();
+            self.log(format!(
+                "{repo}: {} downloadable model files found",
+                wanted.len()
+            ));
+            if !wanted.is_empty() {
+                self.download_files = wanted.join(", ");
+            }
         }
     }
 
@@ -729,6 +839,8 @@ impl TagGuiApp {
 
     /// Poll background channels once per frame.
     pub fn poll_background(&mut self, ctx: &egui::Context) {
+        // Hub file-list lookups.
+        self.poll_repo_files();
         // Model download progress.
         if self.download_active {
             self.download_progress = download_progress_slot()
@@ -918,6 +1030,43 @@ static DOWNLOAD_DONE: std::sync::OnceLock<Mutex<Vec<Arc<AtomicBool>>>> = std::sy
 
 fn download_done_flags() -> &'static Mutex<Vec<Arc<AtomicBool>>> {
     DOWNLOAD_DONE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// A fetched Hub file list: (repo id, file names).
+type RepoFiles = (String, Vec<String>);
+
+/// Channel delivering Hub file lists fetched on worker threads.
+static REPO_FILES_CHANNEL: std::sync::OnceLock<mpsc::SyncSender<RepoFiles>> =
+    std::sync::OnceLock::new();
+
+static REPO_FILES_RECEIVER: std::sync::OnceLock<Mutex<mpsc::Receiver<RepoFiles>>> =
+    std::sync::OnceLock::new();
+
+fn repo_files_sender() -> mpsc::SyncSender<(String, Vec<String>)> {
+    REPO_FILES_CHANNEL
+        .get_or_init(|| {
+            let (sender, receiver) = mpsc::sync_channel(8);
+            REPO_FILES_RECEIVER
+                .set(Mutex::new(receiver))
+                .expect("repo files receiver set once");
+            sender
+        })
+        .clone()
+}
+
+fn take_repo_files() -> Vec<(String, Vec<String>)> {
+    // Ensure the sender side exists (it installs the receiver).
+    let _ = repo_files_sender();
+    let mut taken = Vec::new();
+    if let Some(receiver) = REPO_FILES_RECEIVER.get() {
+        let receiver = receiver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while let Ok(item) = receiver.try_recv() {
+            taken.push(item);
+        }
+    }
+    taken
 }
 
 impl eframe::App for TagGuiApp {

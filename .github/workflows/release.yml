@@ -14,16 +14,39 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: taggui-rs-windows-x64.zip
+            features: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: taggui-rs-windows-x64-cuda.zip
+            features: "--features tg-caption/cuda"
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: taggui-rs-linux-x64.tar.gz
+            features: ""
     runs-on: ${{ matrix.os }}
+    env:
+      # The CUDA build needs nvcc; keep LIBCLANG_PATH unset on Linux so
+      # clang-sys's automatic search works.
+      LIBCLANG_PATH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\LLVM\bin' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install cmake and LLVM (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: choco install llvm cmake -y
+      - name: Install libclang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev cmake
+      - name: Install CUDA toolkit (CUDA artifact)
+        if: matrix.features != ''
+        uses: Jimver/cuda-toolkit@v2
+        with:
+          cuda: '12.8.1'
+          method: network
       - name: Build
-        run: cargo build --release -p tg-gui
+        run: cargo build --release -p tg-gui ${{ matrix.features }}
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

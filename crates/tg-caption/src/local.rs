@@ -326,6 +326,13 @@ pub fn run_local_captioning(
         ctx_params.n_ctx = config.n_ctx;
         ctx_params.n_batch = 512;
         ctx_params.n_ubatch = 512;
+        // Flash attention: llama.cpp's built-in FA CUDA kernels are the
+        // Rust-stack equivalent of the Python app's SageAttention/
+        // FlashAttention-2 options. AUTO lets the backend decide, but
+        // with GPU offload we explicitly request it for the speedup.
+        if config.n_gpu_layers > 0 {
+            ctx_params.flash_attn_type = sys::LLAMA_FLASH_ATTN_TYPE_ENABLED;
+        }
         if config.n_threads > 0 {
             ctx_params.n_threads = config.n_threads as i32;
             ctx_params.n_threads_batch = config.n_threads as i32;

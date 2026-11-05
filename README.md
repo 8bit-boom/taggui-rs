@@ -33,10 +33,26 @@ profiles, Danbooru autocomplete.
 
 ### Windows build requirements (handled by install.bat)
 
-The local-model engine builds llama.cpp from C sources at install time:
-CMake, LLVM/libclang (for the bindings), and the Visual Studio C++ Build
-Tools. GPU layers need a CUDA or Vulkan build (enable the `cuda`/`vulkan`
-features of the `llama-cpp-2` crate); the default build is CPU-only.
+`install.bat` detects your GPU and sets everything up automatically:
+
+- **NVIDIA GPU found** -> offers to install the CUDA toolkit (winget),
+  then builds with CUDA: local captioning offloads all layers to the GPU
+  and enables llama.cpp's flash-attention kernels (the Rust stack's
+  equivalent of the Python app's SageAttention/FlashAttention - nothing
+  extra to install).
+- **AMD/Intel GPU found** -> offers the Vulkan SDK and builds with
+  Vulkan.
+- **No GPU** -> builds CPU-only (the remote API backend is unaffected).
+
+Everything else (Rust, CMake, LLVM/libclang for the bindings, the Visual
+Studio C++ Build Tools when needed) is installed too; the app itself
+reports what it found at startup in the Auto-Captioner panel and the
+console. If the GPU build fails for any reason, the installer falls back
+to a working CPU build automatically.
+
+Downloads are handled in-app via the Model Manager: pick a repo (or a
+quick-pick button), press `Find model files` to auto-select the GGUF
+shards/mmproj/ONNX files, then Download.
 
 ## Installation
 

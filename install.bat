@@ -12,8 +12,12 @@ echo   1. Git (optional, needed for updates)
 echo   2. The Rust toolchain (rustup + cargo)
 echo   3. CMake and LLVM/libclang (needed to build the local-model engine)
 echo   4. Microsoft C++ build tools (only if the build needs them)
-echo   5. TagGUI-rs itself (release build)
-echo The first build downloads dependencies and can take 5-15 minutes.
+echo   5. GPU support: CUDA (NVIDIA) or Vulkan (AMD/Intel) when a GPU is
+echo      found - this is what makes local captioning fast (llama.cpp's
+echo      GPU kernels replace the Python app's SageAttention/FlashAttention)
+echo   6. TagGUI-rs itself, built with GPU features when possible
+echo The first build downloads dependencies and can take 5-15 minutes
+echo (longer with the CUDA build).
 echo.
 
 cd /d "%~dp0"
@@ -91,7 +95,6 @@ if %errorlevel% neq 0 (
 ) else (
     echo [cmake] Found.
 )
-set "LIBCLANG_PATH=%LIBCLANG_PATH%"
 if exist "C:\Program Files\LLVM\bin\libclang.dll" (
     echo [llvm] Found libclang.
     set "LIBCLANG_PATH=C:\Program Files\LLVM\bin"
@@ -116,16 +119,93 @@ if exist "C:\Program Files\LLVM\bin\libclang.dll" (
 )
 
 rem ---------------------------------------------------------------------------
-rem 3. Build TagGUI-rs.
+rem 2c. GPU detection and acceleration setup. llama.cpp's CUDA/Vulkan
+rem     kernels (with built-in flash attention) are the fast path; the
+rem     toolchain is installed automatically when a GPU is found.
+rem ---------------------------------------------------------------------------
+set "BUILD_FEATURES="
+nvidia-smi --query-gpu=name --format=csv,noheader >nul 2>nul
+if %errorlevel% equ 0 (
+    echo [gpu] NVIDIA GPU detected:
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+    call :find_nvcc
+    if defined NVCC_PATH (
+        echo [gpu] CUDA toolkit found - building with CUDA support.
+        set "BUILD_FEATURES=--features cuda"
+        goto :gpu_done
+    )
+    echo [gpu] CUDA toolkit not installed. It enables GPU-accelerated local
+    echo        captioning ^(the fast path^). It is a large download
+    echo        ^(3-4 GB^) and takes several minutes to install.
+    where winget >nul 2>nul
+    if %errorlevel% equ 0 (
+        choice /C YN /M "Install the CUDA toolkit now"
+        if !errorlevel! equ 1 (
+            echo [gpu] Installing the CUDA toolkit via winget...
+            winget install --id Nvidia.CUDA -e --accept-source-agreements --accept-package-agreements
+            call :find_nvcc
+            if defined NVCC_PATH (
+                set "CUDA_DIR=!CUDA_DIR!"
+                set "PATH=!CUDA_DIR!\bin;%PATH%"
+                set "CUDA_PATH=!CUDA_DIR!"
+                setx CUDA_PATH "!CUDA_DIR!" >nul
+                set "BUILD_FEATURES=--features cuda"
+                echo [gpu] CUDA installed - building with CUDA support.
+                goto :gpu_done
+            )
+            echo [gpu] CUDA was installed but nvcc is not visible to this
+            echo        session yet. Open a NEW terminal and run install.bat
+            echo        again to get a CUDA build; continuing CPU-only.
+        ) else (
+            echo [gpu] Skipping CUDA - building CPU-only.
+        )
+    ) else (
+        echo [gpu] winget not available - install the CUDA toolkit from
+        echo        https://developer.nvidia.com/cuda-downloads and re-run
+        echo        install.bat for a GPU build. Continuing CPU-only.
+    )
+    goto :gpu_done
+)
+
+rem No NVIDIA GPU: check for other display adapters (AMD/Intel) and offer
+rem Vulkan - llama.cpp's other GPU backend.
+powershell -NoProfile -Command "if (Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'NVIDIA|Basic|Hyper-V' }) { exit 0 } else { exit 1 }" >nul 2>nul
+if %errorlevel% equ 0 (
+    echo [gpu] Non-NVIDIA GPU detected ^(AMD/Intel^). Vulkan gives GPU
+    echo        acceleration for local captioning on these cards.
+    where winget >nul 2>nul
+    if %errorlevel% equ 0 (
+        choice /C YN /M "Install the Vulkan SDK now"
+        if !errorlevel! equ 1 (
+            echo [gpu] Installing the Vulkan SDK via winget...
+            winget install --id KhronosGroup.VulkanSDK -e --accept-source-agreements --accept-package-agreements
+            set "BUILD_FEATURES=--features vulkan"
+            echo [gpu] Vulkan SDK installed - building with Vulkan support.
+            goto :gpu_done
+        )
+    ) else (
+        echo [gpu] winget not available - install the Vulkan SDK from
+        echo        https://vulkan.lunarg.com/sdk/home and re-run
+        echo        install.bat for a GPU build.
+    )
+) else (
+    echo [gpu] No GPU detected - local captioning will run on CPU.
+    echo        The remote API backend is unaffected.
+)
+
+:gpu_done
+
+rem ---------------------------------------------------------------------------
+rem 3. Build TagGUI-rs with the chosen features.
 rem ---------------------------------------------------------------------------
 echo.
-echo [build] Building TagGUI-rs (release)...
-cargo build --release -p tg-gui
+echo [build] Building TagGUI-rs !BUILD_FEATURES! ...
+cargo build --release -p tg-gui !BUILD_FEATURES!
 if %errorlevel% neq 0 (
     echo [build] The build failed once. A just-updated rustup can lock its
     echo          launcher for a few seconds - waiting and retrying...
     timeout /t 5 /nobreak >nul
-    cargo build --release -p tg-gui
+    cargo build --release -p tg-gui !BUILD_FEATURES!
 )
 if %errorlevel% equ 0 goto :build_ok
 
@@ -154,20 +234,30 @@ if %errorlevel% equ 0 (
 echo.
 echo [build] Retrying the build (a NEW terminal window may be needed if
 echo         this still fails - reopen one and run install.bat again)...
-cargo build --release -p tg-gui
+cargo build --release -p tg-gui !BUILD_FEATURES!
 if %errorlevel% neq 0 (
-    echo [build] ERROR: the build still fails. Try these, in order:
+    echo [build] The build failed again. If the GPU feature is the
+    echo         problem, retrying CPU-only so you still get a working
+    echo         app...
+    cargo build --release -p tg-gui
+    if %errorlevel% equ 0 goto :build_ok_cpu
+    echo [build] ERROR: the CPU-only build also fails. Try these, in order:
     echo         1. Close this window, open a NEW terminal, run install.bat
-    echo            again (the build tools installation above may not be
-    echo            visible to this session yet).
+    echo            again (installations above may not be visible yet).
     echo         2. rustup update
     echo         3. If nothing helps, open an issue with the full output.
     goto :fail
 )
 
+:build_ok_cpu
+echo.
+echo [done] Build succeeded (CPU-only fallback).
+goto :finish
+
 :build_ok
 echo.
 echo [done] Build succeeded.
+:finish
 if not exist "target\release\tag-gui.exe" (
     echo [done] ERROR: expected binary is missing - target\release\tag-gui.exe
     goto :fail
@@ -176,11 +266,32 @@ if not exist "target\release\tag-gui.exe" (
 rem ---------------------------------------------------------------------------
 rem 4. Launcher.
 rem ---------------------------------------------------------------------------
-echo [done] Double-click taggui-rs.bat to start the app.
+echo [done] Double-click start.bat to start the app.
 echo        Use update.bat to pull new versions and rebuild.
 echo.
 choice /C YN /M "Launch TagGUI-rs now"
 if !errorlevel! equ 1 start "" "%~dp0target\release\tag-gui.exe"
+exit /b 0
+
+:find_nvcc
+rem Locate nvcc: PATH first, then the standard CUDA install directories.
+rem Sets NVCC_PATH (and CUDA_DIR, the toolkit root) when found.
+set "NVCC_PATH="
+set "CUDA_DIR="
+where nvcc >nul 2>nul
+if %errorlevel% equ 0 (
+    for /f "delims=" %%P in ('where nvcc') do (
+        set "NVCC_PATH=%%P"
+        goto :find_nvcc_done
+    )
+)
+for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
+    if exist "%%D\bin\nvcc.exe" (
+        set "NVCC_PATH=%%D\bin\nvcc.exe"
+        set "CUDA_DIR=%%D"
+    )
+)
+:find_nvcc_done
 exit /b 0
 
 :fail
