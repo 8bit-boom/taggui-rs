@@ -1,0 +1,292 @@
+{
+ "tag_separator": ", ",
+ "cases": [
+  {
+   "position": "Insert before first tag",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d",
+    "a",
+    "b"
+   ]
+  },
+  {
+   "position": "Insert before first tag",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c",
+   "result": [
+    "c",
+    "a",
+    "b"
+   ]
+  },
+  {
+   "position": "Insert before first tag",
+   "tags": [],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d"
+   ]
+  },
+  {
+   "position": "Insert before first tag",
+   "tags": [
+    "a"
+   ],
+   "caption": "",
+   "result": [
+    "a"
+   ]
+  },
+  {
+   "position": "Insert before first tag",
+   "tags": [
+    "x",
+    "y"
+   ],
+   "caption": "new, tags, here",
+   "result": [
+    "new",
+    "tags",
+    "here",
+    "x",
+    "y"
+   ]
+  },
+  {
+   "position": "Insert after last tag",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c, d",
+   "result": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "position": "Insert after last tag",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c",
+   "result": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "position": "Insert after last tag",
+   "tags": [],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d"
+   ]
+  },
+  {
+   "position": "Insert after last tag",
+   "tags": [
+    "a"
+   ],
+   "caption": "",
+   "result": [
+    "a"
+   ]
+  },
+  {
+   "position": "Insert after last tag",
+   "tags": [
+    "x",
+    "y"
+   ],
+   "caption": "new, tags, here",
+   "result": [
+    "x",
+    "y",
+    "new",
+    "tags",
+    "here"
+   ]
+  },
+  {
+   "position": "Overwrite first tag",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d",
+    "b"
+   ]
+  },
+  {
+   "position": "Overwrite first tag",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c",
+   "result": [
+    "c",
+    "b"
+   ]
+  },
+  {
+   "position": "Overwrite first tag",
+   "tags": [],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d"
+   ]
+  },
+  {
+   "position": "Overwrite first tag",
+   "tags": [
+    "a"
+   ],
+   "caption": "",
+   "result": [
+    "a"
+   ]
+  },
+  {
+   "position": "Overwrite first tag",
+   "tags": [
+    "x",
+    "y"
+   ],
+   "caption": "new, tags, here",
+   "result": [
+    "new",
+    "tags",
+    "here",
+    "y"
+   ]
+  },
+  {
+   "position": "Overwrite all tags",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d"
+   ]
+  },
+  {
+   "position": "Overwrite all tags",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c",
+   "result": [
+    "c"
+   ]
+  },
+  {
+   "position": "Overwrite all tags",
+   "tags": [],
+   "caption": "c, d",
+   "result": [
+    "c",
+    "d"
+   ]
+  },
+  {
+   "position": "Overwrite all tags",
+   "tags": [
+    "a"
+   ],
+   "caption": "",
+   "result": [
+    "a"
+   ]
+  },
+  {
+   "position": "Overwrite all tags",
+   "tags": [
+    "x",
+    "y"
+   ],
+   "caption": "new, tags, here",
+   "result": [
+    "new",
+    "tags",
+    "here"
+   ]
+  },
+  {
+   "position": "Do not add to tags",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c, d",
+   "result": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "position": "Do not add to tags",
+   "tags": [
+    "a",
+    "b"
+   ],
+   "caption": "c",
+   "result": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "position": "Do not add to tags",
+   "tags": [],
+   "caption": "c, d",
+   "result": []
+  },
+  {
+   "position": "Do not add to tags",
+   "tags": [
+    "a"
+   ],
+   "caption": "",
+   "result": [
+    "a"
+   ]
+  },
+  {
+   "position": "Do not add to tags",
+   "tags": [
+    "x",
+    "y"
+   ],
+   "caption": "new, tags, here",
+   "result": [
+    "x",
+    "y"
+   ]
+  }
+ ]
+}

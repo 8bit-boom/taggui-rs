@@ -1,0 +1,478 @@
+{
+ "images": [
+  {
+   "path": "\\ds\\img001.png",
+   "dimensions": [
+    800,
+    600
+   ],
+   "file_size": 500000,
+   "tags": [
+    "1girl",
+    "blue eyes",
+    "solo"
+   ]
+  },
+  {
+   "path": "\\ds\\photo2.jpg",
+   "dimensions": [
+    1920,
+    1080
+   ],
+   "file_size": 2500000,
+   "tags": [
+    "1boy",
+    "outdoors"
+   ]
+  },
+  {
+   "path": "\\ds\\tiny.gif",
+   "dimensions": [
+    50,
+    50
+   ],
+   "file_size": 10000,
+   "tags": []
+  },
+  {
+   "path": "\\ds\\no EXIF.webp",
+   "dimensions": null,
+   "file_size": null,
+   "tags": [
+    "1girl"
+   ]
+  }
+ ],
+ "filters": [
+  {
+   "filter": "blue",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "1girl",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "filter": "img001",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "zzz",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "NOT blue",
+   "parses": true,
+   "matches": [
+    false,
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "filter": "tag:1girl",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "filter": "tag:\"blue eyes\"",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "tag:blue*",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "caption:1girl",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "filter": "caption:zzz",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "name:img*",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "name:*.png",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "path:/ds/*.png",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "path:*.gif",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "ext:png",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "ext:PNG",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "ext:jpg",
+   "parses": true,
+   "matches": [
+    false,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "tags:>2",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "tags:>=2",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "tags:==1",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "filter": "tags:!=0",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    true
+   ]
+  },
+  {
+   "filter": "tags:<1",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "chars:>15",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "chars:<=15",
+   "parses": true,
+   "matches": [
+    false,
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "filter": "width:>=800",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "width:>600",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "width:<=50",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "height:>=600",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "area:>=480000",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "mp:>=0.4",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "mp:<0.01",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "ratio:<2",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "ratio:==1",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "ratio:>2",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "size:>=500kb",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "size:>100kb",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "size:<1mb",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "size:==10000",
+   "parses": true,
+   "matches": [
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "filter": "tag:1girl AND width:>=800",
+   "parses": true,
+   "matches": [
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "tag:1boy OR tag:1girl",
+   "parses": true,
+   "matches": [
+    true,
+    true,
+    false,
+    true
+   ]
+  },
+  {
+   "filter": "NOT tag:1girl AND ext:jpg",
+   "parses": true,
+   "matches": [
+    false,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "(tag:1boy OR tag:1girl) AND width:>=1000",
+   "parses": true,
+   "matches": [
+    false,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "filter": "(tag:1boy OR tag:1girl) AND NOT size:<1mb",
+   "parses": true,
+   "matches": [
+    false,
+    true,
+    false,
+    true
+   ]
+  }
+ ]
+}

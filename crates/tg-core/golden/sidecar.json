@@ -1,0 +1,182 @@
+{
+ "tag_separator": ", ",
+ "inputs": {
+  "a.png": [
+   49,
+   103,
+   105,
+   114,
+   108,
+   44,
+   32,
+   115,
+   111,
+   108,
+   111,
+   44,
+   32,
+   108,
+   111,
+   110,
+   103,
+   32,
+   104,
+   97,
+   105,
+   114
+  ],
+  "b.png": [
+   32,
+   32,
+   115,
+   112,
+   97,
+   99,
+   101,
+   100,
+   32,
+   44,
+   32,
+   111,
+   117,
+   116,
+   32,
+   32
+  ],
+  "c.png": [],
+  "d.png": [
+   116,
+   114,
+   97,
+   105,
+   108,
+   105,
+   110,
+   103,
+   44,
+   32,
+   99,
+   111,
+   109,
+   109,
+   97,
+   44
+  ],
+  "e.png": [
+   109,
+   117,
+   108,
+   116,
+   105,
+   44,
+   32,
+   32,
+   100,
+   111,
+   117,
+   98,
+   108,
+   101,
+   32,
+   32,
+   115,
+   112,
+   97,
+   99,
+   101
+  ],
+  "f.png": [
+   116,
+   97,
+   103,
+   49,
+   44,
+   116,
+   97,
+   103,
+   50,
+   44,
+   110,
+   111,
+   45,
+   115,
+   112,
+   97,
+   99,
+   101
+  ],
+  "g.png": [
+   98,
+   97,
+   100,
+   32,
+   195,
+   191,
+   32,
+   117,
+   116,
+   102,
+   56
+  ],
+  "h.png": null
+ },
+ "results": [
+  {
+   "name": "a.png",
+   "tags": [
+    "1girl",
+    "solo",
+    "long hair"
+   ],
+   "has_caption_file": true
+  },
+  {
+   "name": "b.png",
+   "tags": [
+    "spaced",
+    "out"
+   ],
+   "has_caption_file": true
+  },
+  {
+   "name": "c.png",
+   "tags": [],
+   "has_caption_file": true
+  },
+  {
+   "name": "d.png",
+   "tags": [
+    "trailing",
+    "comma,"
+   ],
+   "has_caption_file": true
+  },
+  {
+   "name": "e.png",
+   "tags": [
+    "multi",
+    "double  space"
+   ],
+   "has_caption_file": true
+  },
+  {
+   "name": "f.png",
+   "tags": [
+    "tag1,tag2,no-space"
+   ],
+   "has_caption_file": true
+  },
+  {
+   "name": "g.png",
+   "tags": [
+    "bad \u00ff utf8"
+   ],
+   "has_caption_file": true
+  },
+  {
+   "name": "h.png",
+   "tags": [],
+   "has_caption_file": false
+  }
+ ]
+}

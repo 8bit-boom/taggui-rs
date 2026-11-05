@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tg-core",
+    "crates/tg-caption",
+    "crates/tg-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0"
+repository = "https://github.com/8bit-boom/taggui-rs"
+
+[workspace.dependencies]
+tg-core = { path = "crates/tg-core" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+image = "0.25"
+thiserror = "2"
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+strip = true

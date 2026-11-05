@@ -1,0 +1,23 @@
+[package]
+name = "tg-caption"
+description = "Auto-captioning for taggui-rs: OpenAI-compatible endpoint client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tg-core.workspace = true
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror.workspace = true
+image.workspace = true
+base64 = "0.22"
+# Blocking client: the GUI runs requests on worker threads (mirroring the
+# Python app's QThread model) instead of pulling tokio into the UI.
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking", "json", "rustls-tls",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true

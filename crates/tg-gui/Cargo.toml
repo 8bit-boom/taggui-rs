@@ -1,0 +1,19 @@
+[package]
+name = "tg-gui"
+description = "The taggui-rs desktop application (egui/eframe)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tg-core.workspace = true
+tg-caption = { path = "../tg-caption" }
+eframe = "0.33"
+egui = "0.33"
+image.workspace = true
+rfd = "0.15"
+dirs = "6"
+
+[dev-dependencies]
+tempfile.workspace = true
