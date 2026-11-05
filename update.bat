@@ -125,6 +125,11 @@ if %errorlevel% neq 0 (
     goto :fail
 )
 
+rem Copy the CUDA runtime DLLs next to the exe (same as install.bat).
+if defined CUDA_DIR (
+    call :copy_cuda_dlls "!CUDA_DIR!"
+)
+
 echo.
 echo [done] Updated and rebuilt. Double-click start.bat to start.
 echo.
@@ -178,6 +183,31 @@ for /d %%F in ("target\release\build\llama-cpp-sys-2-*") do (
         rd /s /q "%%F\out\build"
     )
 )
+exit /b 0
+
+:copy_cuda_dlls
+rem %1 = the CUDA toolkit root; copies the runtime DLLs the local-model
+rem engine links against next to tag-gui.exe (bin for CUDA 12, bin\x64
+rem for CUDA 13). Lists must come from dir /b - a plain for-glob expands
+rem against the current directory.
+set "CUDA_BIN=%~1\bin"
+if not exist "target\release" exit /b 0
+set "COPIED="
+for %%S in ("%CUDA_BIN%" "%CUDA_BIN%\x64") do (
+    for /f "delims=" %%F in ('dir /b "%%~S\cudart64_*.dll" 2^>nul') do (
+        copy /y "%%~S\%%F" "target\release\%%F" >nul
+        set "COPIED=1"
+    )
+    for /f "delims=" %%F in ('dir /b "%%~S\cublas64_*.dll" 2^>nul') do (
+        copy /y "%%~S\%%F" "target\release\%%F" >nul
+        set "COPIED=1"
+    )
+    for /f "delims=" %%F in ('dir /b "%%~S\cublasLt64_*.dll" 2^>nul') do (
+        copy /y "%%~S\%%F" "target\release\%%F" >nul
+        set "COPIED=1"
+    )
+)
+if defined COPIED echo [done] CUDA runtime DLLs copied next to the app.
 exit /b 0
 
 :fail
