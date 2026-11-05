@@ -67,12 +67,28 @@ if defined BUILD_FEATURES (
     echo          CUDA build.^)
 )
 
-rem MSBuild's CUDA targets read CUDA_PATH from the *process* environment;
-rem a session started before the toolkit was installed does not have it,
-rem so wire it up here from wherever nvcc was found.
+rem MSBuild's CUDA build integration resolves the toolkit directory from
+rem the version-specific CUDA_PATH_Vx_y variable (or the registry
+rem InstallDir value) - NOT the generic CUDA_PATH. A session started
+rem before the toolkit was installed has neither, so wire them up here
+rem from wherever nvcc was found.
 if defined CUDA_DIR (
     set "CUDA_PATH=!CUDA_DIR!"
+    for %%V in ("!CUDA_DIR!") do set "CUDA_FOLDER=%%~nxV"
+    set "CUDA_VER=!CUDA_FOLDER:v=V!"
+    set "CUDA_VER=!CUDA_VER:.=_!"
+    set "CUDA_PATH_!CUDA_VER!=!CUDA_DIR!"
     set "PATH=!CUDA_DIR!\bin;%PATH%"
+    echo [update] CUDA env wired: CUDA_PATH and CUDA_PATH_!CUDA_VER!
+    rem Some winget CUDA installs leave the registry InstallDir value out,
+    rem which makes MSBuild's CUDA integration resolve CudaToolkitDir to
+    rem empty. Repair it when missing (best-effort; needs admin - the
+    rem version-specific env var above covers the non-admin case).
+    reg query "HKLM\SOFTWARE\NVIDIA Corporation\GPU Computing Toolkit\CUDA\!CUDA_FOLDER!" /v InstallDir >nul 2>nul
+    if !errorlevel! neq 0 (
+        reg add "HKLM\SOFTWARE\NVIDIA Corporation\GPU Computing Toolkit\CUDA\!CUDA_FOLDER!" /v InstallDir /t REG_SZ /d "!CUDA_DIR!" /f >nul 2>&1
+        echo [update] Repaired the CUDA registry InstallDir entry.
+    )
 )
 
 rem A previously interrupted GPU build can leave a partial CMake cache

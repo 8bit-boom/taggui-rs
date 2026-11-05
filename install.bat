@@ -310,7 +310,20 @@ for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
 :find_nvcc_done
 if defined CUDA_DIR (
     set "CUDA_PATH=!CUDA_DIR!"
+    for %%V in ("!CUDA_DIR!") do set "CUDA_FOLDER=%%~nxV"
+    set "CUDA_VER=!CUDA_FOLDER:v=V!"
+    set "CUDA_VER=!CUDA_VER:.=_!"
+    set "CUDA_PATH_!CUDA_VER!=!CUDA_DIR!"
     set "PATH=!CUDA_DIR!\bin;%PATH%"
+    rem Some winget CUDA installs leave the registry InstallDir value out,
+    rem which makes MSBuild's CUDA integration resolve CudaToolkitDir to
+    rem empty. Repair it when missing (best-effort; needs admin - the
+    rem version-specific env var above covers the non-admin case).
+    reg query "HKLM\SOFTWARE\NVIDIA Corporation\GPU Computing Toolkit\CUDA\!CUDA_FOLDER!" /v InstallDir >nul 2>nul
+    if !errorlevel! neq 0 (
+        reg add "HKLM\SOFTWARE\NVIDIA Corporation\GPU Computing Toolkit\CUDA\!CUDA_FOLDER!" /v InstallDir /t REG_SZ /d "!CUDA_DIR!" /f >nul 2>&1
+        echo [gpu] Repaired the CUDA registry InstallDir entry.
+    )
 )
 exit /b 0
 
