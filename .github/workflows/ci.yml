@@ -12,8 +12,6 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      LIBCLANG_PATH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\LLVM\bin' || '/usr/lib/llvm-14/lib' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -25,12 +23,18 @@ jobs:
       # which needs libclang.
       - name: Install cmake and LLVM (Windows)
         if: runner.os == 'Windows'
+        shell: bash
         run: |
           choco install llvm cmake -y
-        shell: bash
+          echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
       - name: Install libclang (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libclang-dev cmake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev cmake
+          # LIBCLANG_PATH is deliberately NOT set: clang-sys finds
+          # /usr/lib/llvm-*/lib automatically, and a wrong override
+          # disables that search.
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
