@@ -17,6 +17,8 @@ eframe = "0.33"
 egui = "0.33"
 image.workspace = true
 rfd = "0.15"
+csv = "1"
+kamadak-exif = "0.6"
 dirs = "6"
 
 [dev-dependencies]

@@ -22,6 +22,18 @@ pub struct Settings {
     pub autocomplete_tags: bool,
     pub font_size: u32,
     pub danbooru_tags_csv_path: String,
+    /// Saved image-list filters, name -> filter text.
+    pub saved_filters: std::collections::BTreeMap<String, String>,
+    /// Tag presets: reusable tag lists applied to images.
+    pub tag_presets: Vec<TagPreset>,
+    /// Directory where downloaded captioning models are stored.
+    pub models_directory_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TagPreset {
+    pub name: String,
+    pub tags: Vec<String>,
 }
 
 impl Default for Settings {
@@ -36,6 +48,9 @@ impl Default for Settings {
             autocomplete_tags: true,
             font_size: 16,
             danbooru_tags_csv_path: String::new(),
+            saved_filters: std::collections::BTreeMap::new(),
+            tag_presets: Vec::new(),
+            models_directory_path: String::new(),
         }
     }
 }

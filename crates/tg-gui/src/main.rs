@@ -1,6 +1,7 @@
 //! taggui-rs entry point: loads settings and starts the eframe app.
 
 mod app;
+mod extras;
 mod panels;
 
 use tg_core::settings::{default_config_path, Settings};

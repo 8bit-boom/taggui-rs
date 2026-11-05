@@ -30,16 +30,16 @@ Legend: **done** | partial | deferred | n/a (not applicable)
 | Keyboard navigation (Up/Down) | **done** | Ctrl+Z/Y undo/redo |
 | Undo/redo stack | **done** | Snapshot-based, like Python |
 | Image filters UI | **done** | |
-| All-tags editor (rename/delete across images) | deferred | Core ops exist in tg-core |
-| Tag autocomplete (most-used + Danbooru CSV) | deferred | |
-| Dataset statistics dock | deferred | |
-| Tag presets dock | deferred | |
-| Saved filters menu | deferred | |
-| Find & replace dialog UI | deferred | Core ops exist in tg-core |
-| Batch reorder tags dialog | deferred | Core ops exist in tg-core |
+| All-tags editor (rename/delete across images) | **done** | Extras panel: rename, delete everywhere (whole-tag + regex) |
+| Tag autocomplete (Danbooru CSV) | **done** | Suggestion buttons under the tag editor; most-used counts deferred |
+| Dataset statistics | **done** | Counts, avg tags, unique tags, aspect summary, top tags (click = filter) |
+| Saved filters | **done** | Persisted in config.toml, apply/delete |
+| Find & replace dialog UI | **done** | Extras panel (substring/whole-tag/regex, visible scope) |
+| Batch reorder tags | **done** | Sort A-Z / reverse keeping first tag (visible images) |
+| Export dataset | **done** | tags.csv, captions.txt, tag_frequency.csv into the dataset folder |
+| EXIF orientation | **done** | Thumbnails and viewer |
+| Tag presets dock | deferred | Schema in settings; UI deferred |
 | Convert images dialog | deferred | |
-| Export dataset dialog | deferred | |
-| EXIF orientation on thumbnails | deferred | |
 
 ## Auto-captioning (tg-caption)
 

@@ -7,6 +7,7 @@ pub mod filter;
 pub mod image_entry;
 pub mod settings;
 pub mod sidecar;
+pub mod stats;
 pub mod tags;
 
 /// Scan a directory for images and load their sidecar tags, ported from

@@ -121,6 +121,7 @@ pub struct TagGuiApp {
     pub download_files: String,
     pub download_active: bool,
     pub download_progress: Vec<String>,
+    pub extras: crate::extras::ExtrasState,
 }
 
 impl TagGuiApp {
@@ -181,6 +182,17 @@ impl TagGuiApp {
             download_files: String::new(),
             download_active: false,
             download_progress: Vec::new(),
+            extras: crate::extras::ExtrasState::default(),
+        }
+    }
+
+    /// Refresh the tag editor text from the selected image (after batch
+    /// operations changed tags behind the editor).
+    pub fn sync_tag_edit(&mut self) {
+        if let Some(selected) = self.selected {
+            self.tag_edit_text = self.images[selected]
+                .tags
+                .join(&self.settings.effective_tag_separator());
         }
     }
 
@@ -815,7 +827,11 @@ impl TagGuiApp {
         thread::spawn(move || {
             while let Some((index, path)) = thumbnail_requests.lock().unwrap().pop_front() {
                 if let Ok(image) = image::open(&path) {
-                    let rgba = image.thumbnail(200, 200).to_rgba8();
+                    // EXIF orientation (the Python app rotates per the tag).
+                    let orientation = crate::extras::exif_orientation(&path);
+                    let mut rgba = image.to_rgba8();
+                    crate::extras::apply_orientation(&mut rgba, orientation);
+                    let rgba = image::imageops::thumbnail(&rgba, 200, 200);
                     let color_image = ColorImage::from_rgba_unmultiplied(
                         [rgba.width() as usize, rgba.height() as usize],
                         rgba.as_raw(),
@@ -840,7 +856,9 @@ impl TagGuiApp {
         thread::spawn(move || {
             while let Some((index, path)) = viewer_requests.lock().unwrap().pop_front() {
                 if let Ok(image) = image::open(&path) {
-                    let rgba = image.to_rgba8();
+                    let orientation = crate::extras::exif_orientation(&path);
+                    let mut rgba = image.to_rgba8();
+                    crate::extras::apply_orientation(&mut rgba, orientation);
                     let color_image = ColorImage::from_rgba_unmultiplied(
                         [rgba.width() as usize, rgba.height() as usize],
                         rgba.as_raw(),
@@ -911,11 +929,18 @@ impl eframe::App for TagGuiApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         super::panels::top_bar(ctx, self);
+        let mut extras = std::mem::take(&mut self.extras);
+        super::extras::saved_filters_ui(ctx, self, &mut extras);
         super::panels::image_list(ctx, self);
         super::panels::viewer(ctx, self);
         super::panels::tag_editor(ctx, self);
         super::panels::captioner(ctx, self);
         super::panels::log_panel(ctx, self);
+        // The extras panel owns the bottom slot; it borrows the app's
+        // extras state separately from the app borrow itself.
+        let mut extras = std::mem::take(&mut self.extras);
+        super::extras::extras_panel(ctx, self, &mut extras);
+        self.extras = extras;
     }
 
     fn on_exit(&mut self, _glow: Option<&eframe::glow::Context>) {

@@ -157,6 +157,13 @@ pub fn tag_editor(ctx: &egui::Context, app: &mut TagGuiApp) {
             if response.changed() {
                 app.commit_tag_edit();
             }
+            // Danbooru autocomplete (Python app's tag autocomplete).
+            let mut extras = std::mem::take(&mut app.extras);
+            let clicked = crate::extras::autocomplete_popup(ui, app, &mut extras);
+            app.extras = extras;
+            if clicked {
+                app.commit_tag_edit();
+            }
             ui.separator();
             let tag_count = app
                 .selected
