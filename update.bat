@@ -39,6 +39,11 @@ rem its result is not fatal - the build below is what matters.
 echo [update] Updating the Rust toolchain if needed (failures ignored)...
 rustup update stable 1>nul 2>&1
 
+rem libclang for the local-model engine's bindings generation.
+if exist "C:\Program Files\LLVM\in\libclang.dll" (
+    set "LIBCLANG_PATH=C:\Program Files\LLVM\in"
+)
+
 echo [update] Rebuilding (usually much faster than the first build)...
 cargo build --release -p tg-gui
 if %errorlevel% neq 0 (

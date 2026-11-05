@@ -12,12 +12,25 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      LIBCLANG_PATH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\LLVM\bin' || '/usr/lib/llvm-14/lib' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # The local GGUF captioning engine (llama.cpp) is built from C
+      # sources with cmake and its bindings are generated with bindgen,
+      # which needs libclang.
+      - name: Install cmake and LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install llvm cmake -y
+        shell: bash
+      - name: Install libclang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev cmake
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy

@@ -54,8 +54,10 @@ Legend: **done** | partial | deferred | n/a (not applicable)
 | Cancel mid-run | **done** | |
 | Test-run mode (first N) | **done** | |
 | ETA in progress UI | **done** | |
-| Local transformers models (Qwen3-VL etc.) | n/a | Stays in the Python app; Rust local inference (ort/candle) is a future project |
-| WD Tagger (ONNX) | deferred | via `ort` crate |
+| **Local models** | **done** | Via llama.cpp GGUF + mtmd (`local.rs`): Qwen-VL-family chat format, mmproj vision, GPU offload via `n_gpu_layers` (CUDA/Vulkan builds), quantization via GGUF quants. Sequential (decode is single-threaded) |
+| **WD Tagger (ONNX)** | **done** | `ort` crate; exact port of preprocessing (white composite, square pad, bicubic resize, RGB->BGR), kaomoji handling, category filtering, thresholds, sort, truncate |
+| Model manager (downloads) | **done** | HF repo file listing + streamed downloads with progress |
+| Local transformers checkpoints (safetensors) | n/a | By design: local inference uses GGUF; the transformers architectures stay in the Python app |
+| SageAttention / bnb quantization / attn picker | n/a | transformers-specific; GGUF quantization replaces them |
 | Caption profiles | deferred | |
 | Compare prompts dialog | deferred | |
-| Pre-quantized checkpoint detection | n/a | Server-side concern |

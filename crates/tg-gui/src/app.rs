@@ -3,13 +3,16 @@
 //! (right), Auto-Captioner settings (right, below).
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use egui::{ColorImage, Key, TextureHandle, TextureOptions};
 use tg_caption::client::{caption_image, EndpointConfig, GenerationParams};
+use tg_caption::hf;
+use tg_caption::local::{self, LocalModelConfig, LocalProgress};
+use tg_caption::wd_tagger::{WdTagger, WdTaggerError, WdTaggerSettings};
 use tg_core::filter::Filter;
 use tg_core::image_entry::ImageEntry;
 use tg_core::settings::Settings;
@@ -34,6 +37,23 @@ struct LoadedThumbnail {
 struct LoadedViewerImage {
     index: usize,
     image: ColorImage,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptionBackend {
+    RemoteApi,
+    LocalGguf,
+    WdTagger,
+}
+
+impl CaptionBackend {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RemoteApi => "Remote API (vLLM / SGLang)",
+            Self::LocalGguf => "Local GGUF model",
+            Self::WdTagger => "WD Tagger (ONNX)",
+        }
+    }
 }
 
 pub struct TagGuiApp {
@@ -66,6 +86,7 @@ pub struct TagGuiApp {
     pub zoom: f32,
     pub pan: egui::Vec2,
     // Captioning run state.
+    pub backend: CaptionBackend,
     pub api_base_url: String,
     pub api_key: String,
     pub api_model_name: String,
@@ -86,6 +107,20 @@ pub struct TagGuiApp {
     pub caption_done_count: usize,
     pub caption_target_count: usize,
     pub log: VecDeque<String>,
+    // Local GGUF settings.
+    pub local_model_path: String,
+    pub local_mmproj_path: String,
+    pub local_gpu_layers: i32,
+    // WD tagger settings.
+    pub wd_model_path: String,
+    pub wd_min_probability: f32,
+    pub wd_max_tags: usize,
+    pub wd_tags_to_exclude: String,
+    // Model manager downloads.
+    pub download_repo: String,
+    pub download_files: String,
+    pub download_active: bool,
+    pub download_progress: Vec<String>,
 }
 
 impl TagGuiApp {
@@ -114,6 +149,7 @@ impl TagGuiApp {
             thumbnail_requests: Arc::new(Mutex::new(VecDeque::new())),
             zoom: 1.0,
             pan: egui::Vec2::ZERO,
+            backend: CaptionBackend::RemoteApi,
             api_base_url: String::from("http://127.0.0.1:8000/v1"),
             api_key: String::new(),
             api_model_name: String::new(),
@@ -134,6 +170,17 @@ impl TagGuiApp {
             caption_done_count: 0,
             caption_target_count: 0,
             log: VecDeque::new(),
+            local_model_path: String::new(),
+            local_mmproj_path: String::new(),
+            local_gpu_layers: 0,
+            wd_model_path: String::new(),
+            wd_min_probability: 0.35,
+            wd_max_tags: 30,
+            wd_tags_to_exclude: String::new(),
+            download_repo: String::new(),
+            download_files: String::new(),
+            download_active: false,
+            download_progress: Vec::new(),
         }
     }
 
@@ -335,11 +382,246 @@ impl TagGuiApp {
         }
     }
 
-    /// Start an endpoint captioning run over the currently visible images.
+    /// Launch a background download of the Model Manager's repo/files.
+    /// The worker locks the shared slot only briefly per progress update;
+    /// the UI copies the slot every frame in `poll_background`.
+    pub fn start_download(&mut self) {
+        if self.download_active {
+            return;
+        }
+        let repo = self.download_repo.trim().to_owned();
+        let files: Vec<String> = self
+            .download_files
+            .split(',')
+            .map(|file| file.trim().to_owned())
+            .filter(|file| !file.is_empty())
+            .collect();
+        if repo.is_empty() || files.is_empty() {
+            self.log("Enter a repository id and at least one file name.");
+            return;
+        }
+        let models_dir = dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("taggui-rs")
+            .join("models");
+        self.download_active = true;
+        self.download_progress.clear();
+        let slot = download_progress_slot();
+        let slot_for_worker = Arc::clone(&slot);
+        let done = Arc::new(AtomicBool::new(false));
+        download_done_flags()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(Arc::clone(&done));
+        thread::spawn(move || {
+            let slot = slot_for_worker;
+            for file in &files {
+                {
+                    let mut slot_lock =
+                        slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                    slot_lock.push(format!("{file}: downloading..."));
+                }
+                let file_name = file.clone();
+                let result = hf::download_file(
+                    &repo,
+                    file,
+                    None,
+                    &models_dir,
+                    &mut |done_bytes, total| {
+                        let mut slot_lock =
+                            slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                        if let Some(line) = slot_lock.last_mut() {
+                            if total > 0 {
+                                *line = format!(
+                                    "{file_name}: {done_bytes} / {total}                                      bytes");
+                            } else {
+                                *line = format!("{file_name}: {done_bytes} bytes");
+                            }
+                        }
+                    },
+                );
+                let mut slot_lock = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                match result {
+                    Ok(path) => {
+                        if let Some(line) = slot_lock.last_mut() {
+                            *line = format!("{file}: saved to {}", path.display());
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(line) = slot_lock.last_mut() {
+                            *line = format!("{file}: FAILED - {error}");
+                        }
+                    }
+                }
+            }
+            done.store(true, Ordering::Relaxed);
+        });
+        self.download_progress = slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+    }
+
+    /// Start a captioning run with the selected backend over the visible
+    /// images.
     pub fn start_captioning(&mut self) {
         if self.caption_running {
             return;
         }
+        match self.backend {
+            CaptionBackend::RemoteApi => self.start_remote_captioning(),
+            CaptionBackend::LocalGguf => self.start_local_captioning(),
+            CaptionBackend::WdTagger => self.start_wd_captioning(),
+        }
+    }
+
+    /// Start a WD tagger run (local ONNX, sequential).
+    fn start_wd_captioning(&mut self) {
+        let model_path = self.wd_model_path.trim().to_owned();
+        if model_path.is_empty() || !Path::new(&model_path).is_file() {
+            self.log("Set a valid WD tagger model.onnx path first                 (download one from the Model Manager).");
+            return;
+        }
+        let settings = WdTaggerSettings {
+            min_probability: self.wd_min_probability,
+            max_tags: self.wd_max_tags,
+            tags_to_exclude: self
+                .wd_tags_to_exclude
+                .split(',')
+                .map(|tag| tag.trim().replace('_', " "))
+                .filter(|tag| !tag.is_empty())
+                .collect(),
+        };
+        let separator = self.settings.effective_tag_separator();
+        let targets: Vec<(usize, PathBuf)> = self
+            .visible_indices
+            .iter()
+            .map(|&index| (index, self.images[index].path.clone()))
+            .collect();
+        self.caption_cancel = Arc::new(AtomicBool::new(false));
+        self.caption_running = true;
+        self.caption_started_at = Some(std::time::Instant::now());
+        self.caption_failures.clear();
+        self.caption_done_count = 0;
+        self.caption_target_count = targets.len();
+        let cancel = self.caption_cancel.clone();
+        let caption_sender = self.caption_result_sender.clone();
+        let position = self.caption_position;
+        thread::spawn(move || {
+            let mut tagger = match WdTagger::load(Path::new(&model_path)) {
+                Ok(tagger) => tagger,
+                Err(error) => {
+                    if let Some(sender) = caption_sender {
+                        let _ = sender.send(CaptionResult {
+                            index: 0,
+                            caption: None,
+                            error: Some(error.to_string()),
+                            elapsed_seconds: 0.0,
+                        });
+                    }
+                    return;
+                }
+            };
+            for (index, path) in targets {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let started = std::time::Instant::now();
+                let (caption, error) = match tagger.generate_tags(&path, &settings) {
+                    Ok(tags) => {
+                        let caption = tags
+                            .iter()
+                            .map(|(tag, _)| tag.as_str())
+                            .collect::<Vec<&str>>()
+                            .join(&separator);
+                        (Some(caption), None)
+                    }
+                    Err(error @ WdTaggerError::Image { .. }) => (None, Some(error.to_string())),
+                    Err(error) => (None, Some(error.to_string())),
+                };
+                let _ = position;
+                if let Some(sender) = &caption_sender {
+                    let _ = sender.send(CaptionResult {
+                        index,
+                        caption,
+                        error,
+                        elapsed_seconds: started.elapsed().as_secs_f64(),
+                    });
+                }
+            }
+        });
+    }
+
+    /// Start a local GGUF captioning run (sequential on one thread).
+    fn start_local_captioning(&mut self) {
+        let model_path = self.local_model_path.trim().to_owned();
+        if model_path.is_empty() || !Path::new(&model_path).is_file() {
+            self.log("Set a valid GGUF model path first (download one via                 the Model Manager).");
+            return;
+        }
+        let mmproj = self.local_mmproj_path.trim().to_owned();
+        let config = LocalModelConfig {
+            model_path: PathBuf::from(&model_path),
+            mmproj_path: if mmproj.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(mmproj))
+            },
+            n_gpu_layers: self.local_gpu_layers,
+            n_ctx: 4096,
+            n_threads: 0,
+        };
+        let params = self.generation_params();
+        let prompt = self.caption_prompt.clone();
+        let separator_for_results = self.settings.effective_tag_separator();
+        let _ = separator_for_results;
+        let targets: Vec<(usize, PathBuf)> = self
+            .visible_indices
+            .iter()
+            .map(|&index| (index, self.images[index].path.clone()))
+            .collect();
+        self.caption_cancel = Arc::new(AtomicBool::new(false));
+        self.caption_running = true;
+        self.caption_started_at = Some(std::time::Instant::now());
+        self.caption_failures.clear();
+        self.caption_done_count = 0;
+        self.caption_target_count = targets.len();
+        let cancel = self.caption_cancel.clone();
+        let caption_sender = self.caption_result_sender.clone();
+        thread::spawn(move || {
+            local::run_local_captioning(
+                targets,
+                &config,
+                &prompt,
+                &params,
+                &cancel,
+                |progress: LocalProgress| {
+                    if let Some(sender) = &caption_sender {
+                        let _ = sender.send(CaptionResult {
+                            index: progress.index,
+                            caption: progress.caption,
+                            error: progress.error,
+                            elapsed_seconds: progress.elapsed_seconds,
+                        });
+                    }
+                },
+            );
+        });
+    }
+
+    fn generation_params(&self) -> GenerationParams {
+        GenerationParams {
+            max_tokens: self.max_tokens,
+            do_sample: self.do_sample,
+            temperature: self.temperature,
+            top_k: 50,
+            top_p: 1.0,
+            repetition_penalty: 1.0,
+        }
+    }
+
+    /// Start a remote endpoint run (concurrent requests).
+    fn start_remote_captioning(&mut self) {
         let config = EndpointConfig {
             base_url: self.api_base_url.clone(),
             api_key: Some(self.api_key.clone()),
@@ -435,6 +717,22 @@ impl TagGuiApp {
 
     /// Poll background channels once per frame.
     pub fn poll_background(&mut self, ctx: &egui::Context) {
+        // Model download progress.
+        if self.download_active {
+            self.download_progress = download_progress_slot()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+            let all_done = download_done_flags()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .iter()
+                .all(|flag| flag.load(Ordering::Relaxed));
+            if all_done {
+                self.download_active = false;
+            }
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
         // Thumbnails.
         while let Ok(loaded) = self.pending_thumbnails.try_recv() {
             let handle = ctx.load_texture(
@@ -585,6 +883,23 @@ impl TagGuiApp {
             }
         });
     }
+}
+
+/// Shared slot the download worker writes progress lines into; the UI
+/// copies it every frame.
+static DOWNLOAD_PROGRESS: std::sync::OnceLock<Arc<Mutex<Vec<String>>>> = std::sync::OnceLock::new();
+
+fn download_progress_slot() -> Arc<Mutex<Vec<String>>> {
+    DOWNLOAD_PROGRESS
+        .get_or_init(|| Arc::new(Mutex::new(Vec::new())))
+        .clone()
+}
+
+/// Completion flags for each download run.
+static DOWNLOAD_DONE: std::sync::OnceLock<Mutex<Vec<Arc<AtomicBool>>>> = std::sync::OnceLock::new();
+
+fn download_done_flags() -> &'static Mutex<Vec<Arc<AtomicBool>>> {
+    DOWNLOAD_DONE.get_or_init(|| Mutex::new(Vec::new()))
 }
 
 impl eframe::App for TagGuiApp {

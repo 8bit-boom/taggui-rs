@@ -170,97 +170,201 @@ pub fn tag_editor(ctx: &egui::Context, app: &mut TagGuiApp) {
         });
 }
 
-/// Right panel (below tags): the Auto-Captioner, ported from the Python
-/// dock's endpoint mode.
+/// Right panel (below tags): the Auto-Captioner with backend selection,
+/// per-backend settings, and a model downloader.
 pub fn captioner(ctx: &egui::Context, app: &mut TagGuiApp) {
     egui::SidePanel::right("auto_captioner")
         .resizable(true)
         .default_width(340.0)
         .show(ctx, |ui| {
-            ui.heading("Auto-Captioner (remote API)");
-            egui::Grid::new("captioner_settings").show(ui, |ui| {
-                ui.label("Server URL");
-                ui.add(egui::TextEdit::singleline(&mut app.api_base_url));
-                ui.end_row();
-                ui.label("API key");
-                ui.add(egui::TextEdit::singleline(&mut app.api_key).password(true));
-                ui.end_row();
-                ui.label("Model (blank = detect)");
-                ui.add(egui::TextEdit::singleline(&mut app.api_model_name));
-                ui.end_row();
-                ui.label("Prompt");
-                ui.add(egui::TextEdit::multiline(&mut app.caption_prompt).desired_rows(3));
-                ui.end_row();
-                ui.label("Batch size");
-                ui.add(egui::DragValue::new(&mut app.batch_size).range(1..=64));
-                ui.end_row();
-                ui.label("Max tokens");
-                ui.add(egui::DragValue::new(&mut app.max_tokens).range(1..=2000));
-                ui.end_row();
-                ui.label("Sampling");
-                ui.checkbox(&mut app.do_sample, "");
-                ui.end_row();
-                ui.label("Temperature");
-                ui.add(
-                    egui::DragValue::new(&mut app.temperature)
-                        .range(0.0..=2.0)
-                        .speed(0.01),
-                );
-                ui.end_row();
-                ui.label("Test run (0 = off)");
-                ui.add(egui::DragValue::new(&mut app.test_run_count).range(0..=1000));
-                ui.end_row();
-                ui.label("Caption position");
-                egui::ComboBox::from_id_salt("caption_position")
-                    .selected_text(app.caption_position.as_str())
-                    .show_ui(ui, |ui| {
-                        for position in [
-                            tg_core::tags::CaptionPosition::AfterLastTag,
-                            tg_core::tags::CaptionPosition::BeforeFirstTag,
-                            tg_core::tags::CaptionPosition::OverwriteFirstTag,
-                            tg_core::tags::CaptionPosition::OverwriteAllTags,
-                            tg_core::tags::CaptionPosition::DoNotAdd,
-                        ] {
-                            ui.selectable_value(
-                                &mut app.caption_position,
-                                position,
-                                position.as_str(),
-                            );
-                        }
-                    });
-                ui.end_row();
-            });
-            ui.horizontal(|ui| {
-                if app.caption_running {
-                    if ui.button("Stop Captioning").clicked() {
-                        app.stop_captioning();
+            ui.heading("Auto-Captioner");
+            egui::ComboBox::from_id_salt("backend")
+                .selected_text(app.backend.as_str())
+                .show_ui(ui, |ui| {
+                    for backend in [
+                        crate::app::CaptionBackend::RemoteApi,
+                        crate::app::CaptionBackend::LocalGguf,
+                        crate::app::CaptionBackend::WdTagger,
+                    ] {
+                        ui.selectable_value(&mut app.backend, backend, backend.as_str());
                     }
-                } else if ui.button("Start Captioning").clicked() {
-                    app.start_captioning();
+                });
+            ui.separator();
+            match app.backend {
+                crate::app::CaptionBackend::RemoteApi => {
+                    remote_api_settings(ui, app);
                 }
-                if app.caption_running {
-                    let done = app.caption_done_count;
-                    let total = app.caption_target_count;
-                    let eta = app
-                        .caption_started_at
-                        .map(|started| {
-                            let elapsed = started.elapsed().as_secs_f64();
-                            if done > 0 {
-                                elapsed / done as f64 * (total - done) as f64
-                            } else {
-                                0.0
-                            }
-                        })
-                        .unwrap_or(0.0);
-                    ui.label(format!("{done} / {total} - ETA {eta:.0} s"));
+                crate::app::CaptionBackend::LocalGguf => {
+                    local_gguf_settings(ui, app);
                 }
-            });
+                crate::app::CaptionBackend::WdTagger => {
+                    wd_tagger_settings(ui, app);
+                }
+            }
+            ui.separator();
+            run_controls(ui, app);
             if !app.caption_failures.is_empty() {
                 ui.separator();
                 ui.label(format!("{} failed:", app.caption_failures.len()));
                 for (name, error) in app.caption_failures.iter().take(10) {
                     ui.label(format!("{name}: {error}"));
                 }
+            }
+            ui.separator();
+            model_manager(ui, app);
+        });
+}
+
+fn remote_api_settings(ui: &mut egui::Ui, app: &mut TagGuiApp) {
+    egui::Grid::new("remote_settings").show(ui, |ui| {
+        ui.label("Server URL");
+        ui.add(egui::TextEdit::singleline(&mut app.api_base_url));
+        ui.end_row();
+        ui.label("API key");
+        ui.add(egui::TextEdit::singleline(&mut app.api_key).password(true));
+        ui.end_row();
+        ui.label("Model (blank = detect)");
+        ui.add(egui::TextEdit::singleline(&mut app.api_model_name));
+        ui.end_row();
+        generation_grid(ui, app);
+    });
+}
+
+fn generation_grid(ui: &mut egui::Ui, app: &mut TagGuiApp) {
+    ui.label("Prompt");
+    ui.add(egui::TextEdit::multiline(&mut app.caption_prompt).desired_rows(3));
+    ui.end_row();
+    ui.label("Max tokens");
+    ui.add(egui::DragValue::new(&mut app.max_tokens).range(1..=2000));
+    ui.end_row();
+    ui.label("Sampling");
+    ui.checkbox(&mut app.do_sample, "");
+    ui.end_row();
+    ui.label("Temperature");
+    ui.add(
+        egui::DragValue::new(&mut app.temperature)
+            .range(0.0..=2.0)
+            .speed(0.01),
+    );
+    ui.end_row();
+    ui.label("Test run (0 = off)");
+    ui.add(egui::DragValue::new(&mut app.test_run_count).range(0..=1000));
+    ui.end_row();
+    ui.label("Caption position");
+    egui::ComboBox::from_id_salt("caption_position")
+        .selected_text(app.caption_position.as_str())
+        .show_ui(ui, |ui| {
+            for position in [
+                tg_core::tags::CaptionPosition::AfterLastTag,
+                tg_core::tags::CaptionPosition::BeforeFirstTag,
+                tg_core::tags::CaptionPosition::OverwriteFirstTag,
+                tg_core::tags::CaptionPosition::OverwriteAllTags,
+                tg_core::tags::CaptionPosition::DoNotAdd,
+            ] {
+                ui.selectable_value(&mut app.caption_position, position, position.as_str());
+            }
+        });
+    ui.end_row();
+}
+
+fn local_gguf_settings(ui: &mut egui::Ui, app: &mut TagGuiApp) {
+    egui::Grid::new("local_settings").show(ui, |ui| {
+        ui.label("Model GGUF");
+        ui.add(egui::TextEdit::singleline(&mut app.local_model_path));
+        ui.end_row();
+        ui.label("mmproj GGUF");
+        ui.add(egui::TextEdit::singleline(&mut app.local_mmproj_path));
+        ui.end_row();
+        ui.label("GPU layers");
+        ui.add(egui::DragValue::new(&mut app.local_gpu_layers).range(0..=999));
+        ui.end_row();
+        generation_grid(ui, app);
+    });
+    ui.small("0 GPU layers = CPU-only; higher values offload more to the         GPU (needs a CUDA/Vulkan build of the binary). Local captioning         runs one image at a time.");
+}
+
+fn wd_tagger_settings(ui: &mut egui::Ui, app: &mut TagGuiApp) {
+    egui::Grid::new("wd_settings").show(ui, |ui| {
+        ui.label("model.onnx path");
+        ui.add(egui::TextEdit::singleline(&mut app.wd_model_path));
+        ui.end_row();
+        ui.label("Min probability");
+        ui.add(
+            egui::DragValue::new(&mut app.wd_min_probability)
+                .range(0.01..=1.0)
+                .speed(0.01),
+        );
+        ui.end_row();
+        ui.label("Max tags");
+        ui.add(egui::DragValue::new(&mut app.wd_max_tags).range(1..=999));
+        ui.end_row();
+        ui.label("Tags to exclude");
+        ui.add(egui::TextEdit::singleline(&mut app.wd_tags_to_exclude));
+        ui.end_row();
+        ui.label("Caption position");
+        egui::ComboBox::from_id_salt("wd_caption_position")
+            .selected_text(app.caption_position.as_str())
+            .show_ui(ui, |ui| {
+                for position in [
+                    tg_core::tags::CaptionPosition::AfterLastTag,
+                    tg_core::tags::CaptionPosition::BeforeFirstTag,
+                    tg_core::tags::CaptionPosition::OverwriteFirstTag,
+                    tg_core::tags::CaptionPosition::OverwriteAllTags,
+                    tg_core::tags::CaptionPosition::DoNotAdd,
+                ] {
+                    ui.selectable_value(&mut app.caption_position, position, position.as_str());
+                }
+            });
+        ui.end_row();
+    });
+}
+
+fn run_controls(ui: &mut egui::Ui, app: &mut TagGuiApp) {
+    ui.horizontal(|ui| {
+        if app.caption_running {
+            if ui.button("Stop Captioning").clicked() {
+                app.stop_captioning();
+            }
+        } else if ui.button("Start Captioning").clicked() {
+            app.start_captioning();
+        }
+        if app.caption_running {
+            let done = app.caption_done_count;
+            let total = app.caption_target_count;
+            let eta = app
+                .caption_started_at
+                .map(|started| {
+                    let elapsed = started.elapsed().as_secs_f64();
+                    if done > 0 {
+                        elapsed / done as f64 * (total - done) as f64
+                    } else {
+                        0.0
+                    }
+                })
+                .unwrap_or(0.0);
+            ui.label(format!("{done} / {total} - ETA {eta:.0} s"));
+        }
+    });
+}
+
+/// Download GGUF / mmproj / ONNX models from the Hugging Face Hub into
+/// the app's models directory (`%APPDATA%/taggui-rs/models`).
+fn model_manager(ui: &mut egui::Ui, app: &mut TagGuiApp) {
+    egui::CollapsingHeader::new("Model Manager (downloads)")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.label("Repository id (e.g. Qwen/Qwen3-VL-8B-Instruct-GGUF)");
+            ui.add(egui::TextEdit::singleline(&mut app.download_repo));
+            ui.label("Files (comma-separated, e.g. model.gguf, mmproj.gguf)");
+            ui.add(egui::TextEdit::singleline(&mut app.download_files));
+            if ui
+                .add_enabled(!app.download_active, egui::Button::new("Download"))
+                .clicked()
+            {
+                app.start_download();
+            }
+            for line in &app.download_progress {
+                ui.label(line);
             }
         });
 }

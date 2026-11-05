@@ -22,8 +22,21 @@ Python app.
   isolation, cancel, and test runs. The prompt-template library is ported
   verbatim (generated from the Python source).
 
-Not yet ported: WD Tagger (ONNX), dataset statistics, convert-images,
-tag presets, caption profiles, Danbooru autocomplete.
+Local models run through **llama.cpp** (GGUF checkpoints with an
+`mmproj` projector for vision - Qwen2.5-VL/Qwen3-VL, LLaVA-family,
+JoyCaption GGUFs) with GPU offload; WD taggers run via ONNX Runtime.
+The transformers-only features (SageAttention, bitsandbytes,
+safetensors checkpoints) stay in the Python app by design.
+
+Not yet ported: dataset statistics, convert-images, tag presets, caption
+profiles, Danbooru autocomplete.
+
+### Windows build requirements (handled by install.bat)
+
+The local-model engine builds llama.cpp from C sources at install time:
+CMake, LLVM/libclang (for the bindings), and the Visual Studio C++ Build
+Tools. GPU layers need a CUDA or Vulkan build (enable the `cuda`/`vulkan`
+features of the `llama-cpp-2` crate); the default build is CPU-only.
 
 ## Installation
 

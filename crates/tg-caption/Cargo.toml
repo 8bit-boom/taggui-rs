@@ -19,5 +19,14 @@ reqwest = { version = "0.12", default-features = false, features = [
     "blocking", "json", "rustls-tls",
 ] }
 
+# Local GGUF captioning (llama.cpp with the multimodal mtmd interface).
+# The C sources are built with cmake at compile time; enable the crate's
+# / features (on tg-caption) for GPU support.
+llama-cpp-2 = { version = "0.1.161", features = ["mtmd"] }
+llama-cpp-sys-2 = "0.1.161"
+ort = { version = "2.0.0-rc.15", features = ["download-binaries", "ndarray"] }
+ndarray = "0.17"
+csv = "1"
+
 [dev-dependencies]
 tempfile.workspace = true

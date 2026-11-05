@@ -10,8 +10,9 @@ echo.
 echo This installs everything needed to build and run TagGUI-rs:
 echo   1. Git (optional, needed for updates)
 echo   2. The Rust toolchain (rustup + cargo)
-echo   3. Microsoft C++ build tools (only if the build needs them)
-echo   4. TagGUI-rs itself (release build)
+echo   3. CMake and LLVM/libclang (needed to build the local-model engine)
+echo   4. Microsoft C++ build tools (only if the build needs them)
+echo   5. TagGUI-rs itself (release build)
 echo The first build downloads dependencies and can take 5-15 minutes.
 echo.
 
@@ -70,6 +71,50 @@ if exist "%CARGO_BIN%\cargo.exe" (
 )
 
 :build
+rem ---------------------------------------------------------------------------
+rem 2b. CMake and LLVM/libclang - the local GGUF captioning engine
+rem     (llama.cpp) is built from C sources at compile time and its
+rem     bindings are generated with libclang.
+rem ---------------------------------------------------------------------------
+where cmake >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [cmake] CMake was not found. Installing via winget...
+    where winget >nul 2>nul
+    if %errorlevel% equ 0 (
+        winget install --id Kitware.CMake -e --accept-source-agreements --accept-package-agreements
+        echo [cmake] If the build below still cannot find CMake, open a NEW
+        echo        terminal and run install.bat again.
+    ) else (
+        echo [cmake] WARNING: winget not available - install CMake manually
+        echo        from https://cmake.org/download/ and re-run install.bat.
+    )
+) else (
+    echo [cmake] Found.
+)
+set "LIBCLANG_PATH=%LIBCLANG_PATH%"
+if exist "C:\Program Files\LLVM\bin\libclang.dll" (
+    echo [llvm] Found libclang.
+    set "LIBCLANG_PATH=C:\Program Files\LLVM\bin"
+) else (
+    echo [llvm] LLVM/libclang not found. Installing via winget...
+    where winget >nul 2>nul
+    if %errorlevel% equ 0 (
+        winget install --id LLVM.LLVM -e --accept-source-agreements --accept-package-agreements
+        if exist "C:\Program Files\LLVM\bin\libclang.dll" (
+            set "LIBCLANG_PATH=C:\Program Files\LLVM\bin"
+            rem Persist for future terminals too.
+            setx LIBCLANG_PATH "C:\Program Files\LLVM\bin" >nul
+        ) else (
+            echo [llvm] WARNING: libclang still missing - the local-model
+            echo        engine will not build. Install LLVM from
+            echo        https://releases.llvm.org and re-run install.bat.
+        )
+    ) else (
+        echo [llvm] WARNING: winget not available - install LLVM manually
+        echo        from https://releases.llvm.org and set LIBCLANG_PATH.
+    )
+)
+
 rem ---------------------------------------------------------------------------
 rem 3. Build TagGUI-rs.
 rem ---------------------------------------------------------------------------
