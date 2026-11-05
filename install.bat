@@ -131,7 +131,7 @@ if %errorlevel% equ 0 (
     call :find_nvcc
     if defined NVCC_PATH (
         echo [gpu] CUDA toolkit found - building with CUDA support.
-        set "BUILD_FEATURES=--features cuda"
+        set "BUILD_FEATURES=--features tg-caption/cuda"
         goto :gpu_done
     )
     echo [gpu] CUDA toolkit not installed. It enables GPU-accelerated local
@@ -145,11 +145,9 @@ if %errorlevel% equ 0 (
             winget install --id Nvidia.CUDA -e --accept-source-agreements --accept-package-agreements
             call :find_nvcc
             if defined NVCC_PATH (
-                set "CUDA_DIR=!CUDA_DIR!"
-                set "PATH=!CUDA_DIR!\bin;%PATH%"
-                set "CUDA_PATH=!CUDA_DIR!"
+                rem CUDA_PATH/session wiring happened in :find_nvcc.
                 setx CUDA_PATH "!CUDA_DIR!" >nul
-                set "BUILD_FEATURES=--features cuda"
+                set "BUILD_FEATURES=--features tg-caption/cuda"
                 echo [gpu] CUDA installed - building with CUDA support.
                 goto :gpu_done
             )
@@ -179,7 +177,7 @@ if %errorlevel% equ 0 (
         if !errorlevel! equ 1 (
             echo [gpu] Installing the Vulkan SDK via winget...
             winget install --id KhronosGroup.VulkanSDK -e --accept-source-agreements --accept-package-agreements
-            set "BUILD_FEATURES=--features vulkan"
+            set "BUILD_FEATURES=--features tg-caption/vulkan"
             echo [gpu] Vulkan SDK installed - building with Vulkan support.
             goto :gpu_done
         )
@@ -211,9 +209,9 @@ if %errorlevel% equ 0 goto :build_ok
 
 echo.
 echo [build] The build failed. On a fresh Windows machine this is almost
-echo         always a missing Microsoft C++ linker (MSVC). Installing the
-echo         Visual Studio Build Tools now (about 2-7 GB; this takes a
-echo         while)...
+echo         always a missing Microsoft C++ linker ^(MSVC^). Installing the
+echo         Visual Studio Build Tools now ^(about 2-7 GB; this takes a
+echo         while^)...
 where winget >nul 2>nul
 if %errorlevel% equ 0 (
     winget install --id Microsoft.VisualStudio.2022.BuildTools -e ^
@@ -264,6 +262,15 @@ if not exist "target\release\tag-gui.exe" (
 )
 
 rem ---------------------------------------------------------------------------
+rem 3b. Copy the CUDA runtime DLLs next to the exe (cudart/cublas), so the
+rem     app runs without the toolkit on PATH - and on machines that only
+rem     got the binary.
+rem ---------------------------------------------------------------------------
+if defined CUDA_DIR (
+    call :copy_cuda_dlls "!CUDA_DIR!"
+)
+
+rem ---------------------------------------------------------------------------
 rem 4. Launcher.
 rem ---------------------------------------------------------------------------
 echo [done] Double-click start.bat to start the app.
@@ -275,13 +282,16 @@ exit /b 0
 
 :find_nvcc
 rem Locate nvcc: PATH first, then the standard CUDA install directories.
-rem Sets NVCC_PATH (and CUDA_DIR, the toolkit root) when found.
+rem Sets NVCC_PATH and CUDA_DIR (toolkit root) and wires CUDA_PATH into
+rem this session (MSBuild's CUDA targets need it - the installer's
+rem machine-level value is not visible to a running parent shell).
 set "NVCC_PATH="
 set "CUDA_DIR="
 where nvcc >nul 2>nul
 if %errorlevel% equ 0 (
     for /f "delims=" %%P in ('where nvcc') do (
         set "NVCC_PATH=%%P"
+        for %%D in ("%%P\..\..") do set "CUDA_DIR=%%~fD"
         goto :find_nvcc_done
     )
 )
@@ -292,6 +302,41 @@ for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
     )
 )
 :find_nvcc_done
+if defined CUDA_DIR (
+    set "CUDA_PATH=!CUDA_DIR!"
+    set "PATH=!CUDA_DIR!\bin;%PATH%"
+)
+exit /b 0
+
+:copy_cuda_dlls
+rem %1 = the CUDA toolkit root; copies the runtime DLLs the local-model
+rem engine links against next to tag-gui.exe. CUDA 12 keeps them in
+rem `bin`, CUDA 13 in `bin\x64` - check both. The file lists must come
+rem from `dir /b`: a plain `for %%F in (glob)` expands against the
+rem current directory, which has no matches.
+set "CUDA_BIN=%~1\bin"
+if not exist "target\release" exit /b 0
+set "COPIED="
+for %%S in ("%CUDA_BIN%" "%CUDA_BIN%\x64") do (
+    for /f "delims=" %%F in ('dir /b "%%~S\cudart64_*.dll" 2^>nul') do (
+        copy /y "%%~S\%%F" "target\release\%%F" >nul
+        set "COPIED=1"
+    )
+    for /f "delims=" %%F in ('dir /b "%%~S\cublas64_*.dll" 2^>nul') do (
+        copy /y "%%~S\%%F" "target\release\%%F" >nul
+        set "COPIED=1"
+    )
+    for /f "delims=" %%F in ('dir /b "%%~S\cublasLt64_*.dll" 2^>nul') do (
+        copy /y "%%~S\%%F" "target\release\%%F" >nul
+        set "COPIED=1"
+    )
+)
+if defined COPIED (
+    echo [done] CUDA runtime DLLs copied next to the app.
+) else (
+    echo [gpu] WARNING: CUDA runtime DLLs not found in the toolkit -
+    echo        the app may fail to start. Re-run install.bat.
+)
 exit /b 0
 
 :fail

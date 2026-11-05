@@ -49,14 +49,14 @@ rem NVIDIA GPU + toolkit are present, Vulkan when the SDK is installed.
 set "BUILD_FEATURES="
 where nvcc >nul 2>nul
 if %errorlevel% equ 0 (
-    set "BUILD_FEATURES=--features cuda"
+    set "BUILD_FEATURES=--features tg-caption/cuda"
     goto :gpu_found
 )
 for /d %%D in ("C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*") do (
     if exist "%%D\bin\nvcc.exe" (
         set "PATH=%%D\bin;%PATH%"
         set "CUDA_PATH=%%D"
-        set "BUILD_FEATURES=--features cuda"
+        set "BUILD_FEATURES=--features tg-caption/cuda"
     )
 )
 :gpu_found
@@ -84,8 +84,8 @@ if %errorlevel% neq 0 (
     )
 )
 if %errorlevel% neq 0 (
-    echo [update] One more retry, CPU-only (the GPU feature may be the
-    echo          problem)...
+    echo [update] One more retry, CPU-only ^(the GPU feature may be the
+    echo          problem^)...
     cargo build --release -p tg-gui
 )
 if %errorlevel% neq 0 (
